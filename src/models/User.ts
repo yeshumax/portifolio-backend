@@ -9,6 +9,7 @@ export interface IUser extends Document {
   profileImage?: string;
   isBlocked: boolean;
   isActive: boolean;
+  lastLoginAt?: Date;
   matchPassword(enteredPassword: string): Promise<boolean>;
 }
 
@@ -43,6 +44,9 @@ const userSchema = new mongoose.Schema(
     isActive: {
       type: Boolean,
       default: true,
+    },
+    lastLoginAt: {
+      type: Date,
     },
   },
   {
