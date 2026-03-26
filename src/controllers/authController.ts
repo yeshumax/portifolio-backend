@@ -126,7 +126,7 @@ const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
 // @route   PUT /api/auth/profile
 // @access  Private
 const updateUserProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = await User.findById(req.user._id);
+  const user = await User.findById(req.user?._id);
 
   if (user) {
     user.name = req.body.name || user.name;
