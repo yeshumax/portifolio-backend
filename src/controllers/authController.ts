@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import User from '../models/User';
-import generateToken from '../utils/generateToken';
+import { setTokens, clearTokens } from '../utils/generateTokens';
+import { resetLoginAttempts } from '../middleware/loginAttemptMiddleware';
 
 // @desc    Auth user / set token
 // @route   POST /api/auth/login
@@ -9,29 +11,53 @@ import generateToken from '../utils/generateToken';
 const loginUser = asyncHandler(async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
+  try {
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      res.status(503);
+      throw new Error('Database service unavailable. Please try again later.');
+    }
 
-  if (user && (await user.matchPassword(password))) {
-    if (user.isBlocked) {
-      res.status(403);
-      throw new Error('Your account is blocked.');
+    const user = await User.findOne({ email });
+
+    if (user && (await user.matchPassword(password))) {
+      if (user.isBlocked) {
+        res.status(403);
+        throw new Error('Your account is blocked.');
+      }
+      if (!user.isActive) {
+        res.status(403);
+        throw new Error('Your account is pending admin approval.');
+      }
+      if (!user.isEmailVerified) {
+        res.status(403);
+        throw new Error('Please verify your email address before logging in.');
+      }
+      
+      // Update last login
+      user.lastLoginAt = new Date();
+      await user.save();
+      
+      // Reset login attempts on successful login
+      resetLoginAttempts(email);
+      
+      setTokens(res, user._id.toString());
+      res.status(200).json({
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profileImage: user.profileImage,
+        isActive: user.isActive,
+        isEmailVerified: user.isEmailVerified,
+      });
+    } else {
+      res.status(401);
+      throw new Error('Invalid email or password');
     }
-    if (!user.isActive) {
-      res.status(403);
-      throw new Error('Your account is pending admin approval.');
-    }
-    generateToken(res, user._id.toString());
-    res.status(200).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      profileImage: user.profileImage,
-      isActive: user.isActive,
-    });
-  } else {
-    res.status(401);
-    throw new Error('Invalid email or password');
+  } catch (error: any) {
+    // Re-throw the error to be handled by error middleware
+    throw error;
   }
 });
 
@@ -41,53 +67,78 @@ const loginUser = asyncHandler(async (req: Request, res: Response) => {
 const registerUser = asyncHandler(async (req: Request, res: Response) => {
   const { name, email, password, role } = req.body;
 
-  const userExists = await User.findOne({ email });
-
-  if (userExists) {
-    res.status(400);
-    throw new Error('User already exists');
-  }
-
-  let isActive = req.body.isActive !== undefined ? req.body.isActive : true;
-  if (role === 'admin' && req.body.isActive === undefined) {
-    const existingAdmin = await User.findOne({ role: 'admin', isActive: true });
-    if (existingAdmin) {
-      isActive = false; // requires approval for public registration
+  try {
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      res.status(503);
+      throw new Error('Database service unavailable. Please try again later.');
     }
-  }
 
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role: role === 'admin' ? 'admin' : 'user',
-    isActive,
-  });
+    const userExists = await User.findOne({ email });
 
-  if (user) {
-    if (!user.isActive) {
+    if (userExists) {
+      res.status(400);
+      throw new Error('User already exists');
+    }
+
+    let isActive = false; // Default to false for email verification
+    let isEmailVerified = false; // Default to false for email verification
+    
+    if (role === 'admin') {
+      const existingAdmin = await User.findOne({ role: 'admin' });
+      if (!existingAdmin) {
+        isActive = true; // First admin can be active without verification
+        isEmailVerified = true; // First admin doesn't need email verification
+      }
+    } else {
+      // Regular users don't need admin approval
+      isActive = true;
+      isEmailVerified = true; // Skip email verification for simplicity
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: role === 'admin' ? 'admin' : 'user',
+      isActive,
+      isEmailVerified,
+    });
+
+    if (user) {
+      if (!user.isActive) {
+        const message = role === 'admin' 
+          ? 'Admin account created successfully. Please wait for an existing admin to approve your request.'
+          : 'Account created successfully. Please check your email to verify your account.';
+        
+        res.status(201).json({
+          message,
+          _id: user._id,
+          name: user.name,
+          role: user.role,
+          isActive: user.isActive,
+          isEmailVerified: user.isEmailVerified,
+        });
+        return;
+      }
+
+      setTokens(res, user._id.toString());
       res.status(201).json({
-        message: 'Admin account created successfully. Please wait for an existing admin to approve your request.',
         _id: user._id,
         name: user.name,
+        email: user.email,
         role: user.role,
+        profileImage: user.profileImage,
         isActive: user.isActive,
+        isEmailVerified: user.isEmailVerified,
       });
-      return;
+    } else {
+      res.status(400);
+      throw new Error('Invalid user data');
     }
-
-    generateToken(res, user._id.toString());
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      profileImage: user.profileImage,
-      isActive: user.isActive,
-    });
-  } else {
-    res.status(400);
-    throw new Error('Invalid user data');
+  } catch (error: any) {
+    // Re-throw the error to be handled by error middleware
+    throw error;
   }
 });
 
@@ -95,10 +146,7 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
 // @route   POST /api/auth/logout
 // @access  Public
 const logoutUser = asyncHandler(async (req: Request, res: Response) => {
-  res.cookie('jwt', '', {
-    httpOnly: true,
-    expires: new Date(0),
-  });
+  clearTokens(res);
   res.status(200).json({ message: 'User logged out' });
 });
 
@@ -106,29 +154,60 @@ const logoutUser = asyncHandler(async (req: Request, res: Response) => {
 // @route   GET /api/auth/profile
 // @access  Private
 const getUserProfile = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    res.status(401);
-    throw new Error('Not authorized');
+  try {
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      res.status(503);
+      throw new Error('Database service unavailable. Please try again later.');
+    }
+
+    if (!req.user) {
+      res.status(401);
+      throw new Error('Not authorized');
+    }
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      res.status(404);
+      throw new Error('User not found');
+    }
+
+    const userProfile = {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profileImage: user.profileImage,
+      isActive: user.isActive,
+      lastLoginAt: user.lastLoginAt,
+    };
+
+    res.status(200).json(userProfile);
+  } catch (error: any) {
+    // Re-throw the error to be handled by error middleware
+    throw error;
   }
-
-  const user = {
-    _id: req.user._id,
-    name: req.user.name,
-    email: req.user.email,
-    role: req.user.role,
-    profileImage: req.user.profileImage,
-  };
-
-  res.status(200).json(user);
 });
 
 // @desc    Update user profile
 // @route   PUT /api/auth/profile
 // @access  Private
 const updateUserProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = await User.findById(req.user?._id);
+  try {
+    // Check if database is connected
+    if (mongoose.connection.readyState !== 1) {
+      res.status(503);
+      throw new Error('Database service unavailable. Please try again later.');
+    }
 
-  if (user) {
+    const user = await User.findById(req.user?._id);
+
+    if (!user) {
+      res.status(404);
+      throw new Error('User not found');
+    }
+
     user.name = req.body.name || user.name;
     user.email = req.body.email || user.email;
     if (req.body.profileImage !== undefined) {
@@ -147,10 +226,11 @@ const updateUserProfile = asyncHandler(async (req: Request, res: Response) => {
       role: updatedUser.role,
       profileImage: updatedUser.profileImage,
       isActive: updatedUser.isActive,
+      lastLoginAt: updatedUser.lastLoginAt,
     });
-  } else {
-    res.status(404);
-    throw new Error('User not found');
+  } catch (error: any) {
+    // Re-throw the error to be handled by error middleware
+    throw error;
   }
 });
 
