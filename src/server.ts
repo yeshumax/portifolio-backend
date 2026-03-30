@@ -57,7 +57,6 @@ if (process.env.NODE_ENV === 'development') {
     res.json({ message: 'Rate limits cleared' });
   });
 
-  // Development endpoint to clear and reseed database
   app.post('/dev/reseed-database', async (req: Request, res: Response) => {
     try {
       const mongoose = require('mongoose');
@@ -65,53 +64,17 @@ if (process.env.NODE_ENV === 'development') {
       const Project = require('./models/Project').default;
       const Skill = require('./models/Skill').default;
       
-      // Clear all collections
       await User.deleteMany({});
       await Project.deleteMany({});
       await Skill.deleteMany({});
-      
-      console.log('Cleared all database collections');
-      
-      // Reseed with fresh data
-      const { seedData } = require('./utils/seedData');
-      await seedData();
-      
+    
       res.json({ message: 'Database cleared and reseeded successfully' });
     } catch (error: any) {
-      console.error('Error reseeding database:', error);
       res.status(500).json({ message: 'Failed to reseed database' });
     }
   });
 
-  // Development endpoint to test validation
-  app.post('/dev/test-validation', (req: Request, res: Response) => {
-    const { name, email, password, confirmPassword, role } = req.body;
-    
-    console.log('Validation test request:', {
-      name,
-      email,
-      password,
-      confirmPassword,
-      role
-    });
-    
-    // Test validation functions
-    const { validateName, validateEmail, validatePassword } = require('./middleware/validationMiddleware');
-    
-    const nameError = validateName(name);
-    const emailError = validateEmail(email);
-    const passwordError = validatePassword(password);
-    
-    res.json({
-      name: { isValid: nameError === '', message: nameError },
-      email: { isValid: emailError === '', message: emailError },
-      password: { isValid: passwordError === '', message: passwordError }
-    });
-  });
-
-  // Development endpoint to bypass validation (for testing)
   app.post('/dev/bypass-validation', (req: Request, res: Response) => {
-    console.log('Bypassing validation for development');
     res.json({ message: 'Validation bypassed for development' });
   });
 }
@@ -142,23 +105,16 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-// Fixed: Properly handle database connection before starting the server
 const startServer = async () => {
   try {
-    // Wait for database connection
     await connectDB();
-    
-    // Start server only after successful database connection
     app.listen(PORT, () => {
-      console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-      console.log(`📡 API available at: http://localhost:${PORT}`);
-      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`Server running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    console.error('Failed to start server:', error);
     process.exit(1);
   }
 };
 
-// Start the application
 startServer();
