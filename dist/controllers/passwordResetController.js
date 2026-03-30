@@ -1,0 +1,190 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.verifyResetToken = exports.resetPassword = exports.requestPasswordReset = void 0;
+const express_async_handler_1 = __importDefault(require("express-async-handler"));
+const mongoose_1 = __importDefault(require("mongoose"));
+const User_1 = __importDefault(require("../models/User"));
+const crypto_1 = __importDefault(require("crypto"));
+const passwordResetTokens = new Map();
+const generateResetToken = () => {
+    return crypto_1.default.randomBytes(32).toString('hex');
+};
+const storeResetToken = (email, token) => {
+    const expires = new Date();
+    expires.setHours(expires.getHours() + 1); // Token expires in 1 hour
+    passwordResetTokens.set(email.toLowerCase(), {
+        token,
+        expires
+    });
+};
+const validateResetToken = (email, token) => {
+    const storedData = passwordResetTokens.get(email.toLowerCase());
+    if (!storedData) {
+        return false;
+    }
+    if (storedData.token !== token) {
+        return false;
+    }
+    if (storedData.expires < new Date()) {
+        passwordResetTokens.delete(email.toLowerCase());
+        return false;
+    }
+    return true;
+};
+const clearResetToken = (email) => {
+    passwordResetTokens.delete(email.toLowerCase());
+};
+// Clean up expired tokens every hour
+setInterval(() => {
+    const now = new Date();
+    for (const [email, data] of passwordResetTokens.entries()) {
+        if (data.expires < now) {
+            passwordResetTokens.delete(email);
+        }
+    }
+}, 60 * 60 * 1000);
+// @desc    Request password reset
+// @route   POST /api/auth/forgot-password
+// @access  Public
+const requestPasswordReset = (0, express_async_handler_1.default)(async (req, res) => {
+    const { email } = req.body;
+    try {
+        // Check if database is connected
+        if (mongoose_1.default.connection.readyState !== 1) {
+            res.status(503);
+            throw new Error('Database service unavailable. Please try again later.');
+        }
+        if (!email) {
+            res.status(400);
+            throw new Error('Email is required');
+        }
+        const user = await User_1.default.findOne({ email });
+        // Always return success to prevent email enumeration attacks
+        if (!user) {
+            res.status(200).json({
+                success: true,
+                message: 'If an account with that email exists, a password reset link has been sent.'
+            });
+            return;
+        }
+        // Generate reset token
+        const resetToken = generateResetToken();
+        storeResetToken(email, resetToken);
+        // In a real application, you would send an email here
+        // For now, we'll return the token in development mode
+        const resetUrl = `${process.env.CLIENT_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}&email=${email}`;
+        if (process.env.NODE_ENV === 'development') {
+            console.log(`Password reset link for ${email}: ${resetUrl}`);
+            res.status(200).json({
+                success: true,
+                message: 'Password reset link generated (development mode)',
+                resetToken,
+                resetUrl
+            });
+            return;
+        }
+        res.status(200).json({
+            success: true,
+            message: 'If an account with that email exists, a password reset link has been sent.'
+        });
+    }
+    catch (error) {
+        throw error;
+    }
+});
+exports.requestPasswordReset = requestPasswordReset;
+// @desc    Reset password
+// @route   POST /api/auth/reset-password
+// @access  Public
+const resetPassword = (0, express_async_handler_1.default)(async (req, res) => {
+    const { email, token, newPassword } = req.body;
+    try {
+        // Check if database is connected
+        if (mongoose_1.default.connection.readyState !== 1) {
+            res.status(503);
+            throw new Error('Database service unavailable. Please try again later.');
+        }
+        if (!email || !token || !newPassword) {
+            res.status(400);
+            throw new Error('Email, token, and new password are required');
+        }
+        // Validate reset token
+        if (!validateResetToken(email, token)) {
+            res.status(400);
+            throw new Error('Invalid or expired reset token');
+        }
+        const user = await User_1.default.findOne({ email });
+        if (!user) {
+            res.status(404);
+            throw new Error('User not found');
+        }
+        // Validate new password
+        const passwordValidation = validatePassword(newPassword);
+        if (!passwordValidation.isValid) {
+            res.status(400);
+            throw new Error(passwordValidation.errors.join(', '));
+        }
+        // Update password
+        user.password = newPassword;
+        await user.save();
+        // Clear the reset token
+        clearResetToken(email);
+        res.status(200).json({
+            success: true,
+            message: 'Password has been reset successfully'
+        });
+    }
+    catch (error) {
+        throw error;
+    }
+});
+exports.resetPassword = resetPassword;
+// @desc    Verify reset token
+// @route   POST /api/auth/verify-reset-token
+// @access  Public
+const verifyResetToken = (0, express_async_handler_1.default)(async (req, res) => {
+    const { email, token } = req.body;
+    try {
+        if (!email || !token) {
+            res.status(400);
+            throw new Error('Email and token are required');
+        }
+        const isValid = validateResetToken(email, token);
+        res.status(200).json({
+            success: true,
+            isValid
+        });
+    }
+    catch (error) {
+        throw error;
+    }
+});
+exports.verifyResetToken = verifyResetToken;
+const validatePassword = (password) => {
+    const errors = [];
+    if (password.length < 8) {
+        errors.push('Password must be at least 8 characters long');
+    }
+    if (password.length > 100) {
+        errors.push('Password must be less than 100 characters long');
+    }
+    if (!/[A-Z]/.test(password)) {
+        errors.push('Password must contain at least one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+        errors.push('Password must contain at least one lowercase letter');
+    }
+    if (!/\d/.test(password)) {
+        errors.push('Password must contain at least one number');
+    }
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
+        errors.push('Password must contain at least one special character');
+    }
+    return {
+        isValid: errors.length === 0,
+        errors
+    };
+};
