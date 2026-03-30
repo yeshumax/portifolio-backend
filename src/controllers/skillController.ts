@@ -6,8 +6,18 @@ import Skill from '../models/Skill';
 // @route   GET /api/skills
 // @access  Public
 const getSkills = asyncHandler(async (req: Request, res: Response) => {
-  const skills = await Skill.find({});
-  res.status(200).json(skills);
+  try {
+    // Fetch skills from database
+    const skills = await Skill.find().sort({ name: 1 });
+    
+    res.status(200).json(skills);
+  } catch (error: any) {
+    console.error('Error fetching skills:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch skills from database'
+    });
+  }
 });
 
 // @desc    Create a skill
