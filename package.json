@@ -2,7 +2,7 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "server.js",
+  "main": "server.ts",
   "type": "commonjs",
   "scripts": {
     "start": "tsx src/server.ts",
@@ -22,7 +22,8 @@
     "express-async-handler": "^1.2.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.3.1",
-    "multer": "^2.1.1"
+    "multer": "^2.1.1",
+    "nodemon": "^3.1.14"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
