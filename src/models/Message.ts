@@ -1,30 +1,84 @@
-import mongoose, { Document, Model } from 'mongoose';
-import { IUser } from './User';
+import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IMessage extends Document {
-  userId: mongoose.Types.ObjectId | IUser;
+  userId?: mongoose.Types.ObjectId;
+  name?: string;
+  email?: string;
+  type: 'feedback' | 'request' | 'complaint' | 'collaboration' | 'question';
   message: string;
-  type: 'feedback' | 'complaint' | 'request';
-  status: 'pending' | 'approved' | 'rejected' | 'resolved';
+  status: 'pending' | 'in-progress' | 'resolved' | 'approved' | 'rejected';
   adminResponse?: string;
+  read: boolean;
   isReadByAdmin: boolean;
   isReadByUser: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
-const messageSchema = new mongoose.Schema(
+const messageSchema = new Schema<IMessage>(
   {
-    userId: { type: mongoose.Schema.Types.ObjectId, required: true, ref: 'User' },
-    message: { type: String, required: true },
-    type: { type: String, required: true, enum: ['feedback', 'complaint', 'request'] },
-    status: { type: String, required: true, enum: ['pending', 'approved', 'rejected', 'resolved'], default: 'pending' },
-    adminResponse: { type: String },
-    isReadByAdmin: { type: Boolean, default: false },
-    isReadByUser: { type: Boolean, default: true },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: false,
+    },
+    name: {
+      type: String,
+      required: function (this: IMessage) {
+        return !this.userId;
+      },
+    },
+    email: {
+      type: String,
+      required: function (this: IMessage) {
+        return !this.userId;
+      },
+      lowercase: true,
+      trim: true,
+    },
+    type: {
+      type: String,
+      enum: ['feedback', 'request', 'complaint', 'collaboration', 'question'],
+      required: true,
+    },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'in-progress', 'resolved', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    adminResponse: {
+      type: String,
+      default: '',
+    },
+    read: {
+      type: Boolean,
+      default: false,
+    },
+    isReadByAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    isReadByUser: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,
   }
 );
 
-const Message: Model<IMessage> = mongoose.model<IMessage>('Message', messageSchema);
+// Indexes for better query performance
+messageSchema.index({ userId: 1, createdAt: -1 });
+messageSchema.index({ status: 1, createdAt: -1 });
+messageSchema.index({ email: 1, createdAt: -1 });
+messageSchema.index({ isReadByAdmin: 1 });
+messageSchema.index({ isReadByUser: 1 });
+
+const Message = mongoose.model<IMessage>('Message', messageSchema);
 export default Message;
