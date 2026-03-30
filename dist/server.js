@@ -25,7 +25,7 @@ const skillRoutes_1 = __importDefault(require("./routes/skillRoutes"));
 const profileRoutes_1 = __importDefault(require("./routes/profileRoutes"));
 const app = (0, express_1.default)();
 const corsOptions = {
-    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    origin: ['http://localhost:3000', 'https://portiolios-frontend.vercel.app', 'http://127.0.0.1:3000'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
