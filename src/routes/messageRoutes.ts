@@ -12,9 +12,14 @@ import { protect, admin } from '../middleware/authMiddleware';
 
 const router = express.Router();
 
-router.route('/').get(protect, admin, getMessages).post(protect, createMessage);
+// Public route - anyone can create a message
+router.route('/').post(createMessage);
+
+// Protected routes
+router.route('/').get(protect, admin, getMessages);
 router.route('/unread').get(protect, getUnreadMessages);
 router.route('/my-messages').get(protect, getMyMessages);
+router.route('/unhandled-count').get(protect, admin, getUnhandledCount);
 router.route('/:id/respond').put(protect, admin, respondToMessage);
 router.route('/:id/mark-as-read').put(protect, markAsRead);
 
