@@ -3,8 +3,18 @@ import asyncHandler from 'express-async-handler';
 import Project from '../models/Project';
 
 const getProjects = asyncHandler(async (req: Request, res: Response) => {
-  const projects = await Project.find({});
-  res.status(200).json(projects);
+  try {
+    // Fetch projects from database
+    const projects = await Project.find().sort({ createdAt: -1 });
+    
+    res.status(200).json(projects);
+  } catch (error: any) {
+    console.error('Error fetching projects:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch projects from database'
+    });
+  }
 });
 
 const createProject = asyncHandler(async (req: Request, res: Response) => {
