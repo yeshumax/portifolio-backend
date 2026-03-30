@@ -1,26 +1,33 @@
-import express, { Application, Request, Response } from 'express';
 import dotenv from 'dotenv';
+dotenv.config();
+import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import connectDB from './config/db';
 import path from 'path';
 import { notFound, errorHandler } from './middleware/errorMiddleware';
 
+// Import models to ensure they're registered with Mongoose
+import './models/User';
+import './models/Project';
+import './models/Skill';
+import './models/Message';
+import './models/AuditLog';
+
 import authRoutes from './routes/authRoutes';
 import userRoutes from './routes/userRoutes';
 import projectRoutes from './routes/projectRoutes';
 import messageRoutes from './routes/messageRoutes';
 import skillRoutes from './routes/skillRoutes';
-
-dotenv.config();
-
-connectDB();
+import profileRoutes from './routes/profileRoutes';
 
 const app: Application = express();
 
 const corsOptions = {
-  origin: 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 };
 
 app.use(cors(corsOptions));
@@ -28,11 +35,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/skills', skillRoutes);
+app.use('/api/profile', profileRoutes);
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
@@ -40,11 +49,116 @@ app.get('/', (req: Request, res: Response) => {
   res.send('API is running...');
 });
 
+// Development endpoint to clear rate limits
+if (process.env.NODE_ENV === 'development') {
+  app.post('/dev/clear-rate-limits', (req: Request, res: Response) => {
+    const { clearRateLimits } = require('./middleware/rateLimitMiddleware');
+    clearRateLimits();
+    res.json({ message: 'Rate limits cleared' });
+  });
+
+  // Development endpoint to clear and reseed database
+  app.post('/dev/reseed-database', async (req: Request, res: Response) => {
+    try {
+      const mongoose = require('mongoose');
+      const User = require('./models/User').default;
+      const Project = require('./models/Project').default;
+      const Skill = require('./models/Skill').default;
+      
+      // Clear all collections
+      await User.deleteMany({});
+      await Project.deleteMany({});
+      await Skill.deleteMany({});
+      
+      console.log('Cleared all database collections');
+      
+      // Reseed with fresh data
+      const { seedData } = require('./utils/seedData');
+      await seedData();
+      
+      res.json({ message: 'Database cleared and reseeded successfully' });
+    } catch (error: any) {
+      console.error('Error reseeding database:', error);
+      res.status(500).json({ message: 'Failed to reseed database' });
+    }
+  });
+
+  // Development endpoint to test validation
+  app.post('/dev/test-validation', (req: Request, res: Response) => {
+    const { name, email, password, confirmPassword, role } = req.body;
+    
+    console.log('Validation test request:', {
+      name,
+      email,
+      password,
+      confirmPassword,
+      role
+    });
+    
+    // Test validation functions
+    const { validateName, validateEmail, validatePassword } = require('./middleware/validationMiddleware');
+    
+    const nameError = validateName(name);
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    
+    res.json({
+      name: { isValid: nameError === '', message: nameError },
+      email: { isValid: emailError === '', message: emailError },
+      password: { isValid: passwordError === '', message: passwordError }
+    });
+  });
+
+  // Development endpoint to bypass validation (for testing)
+  app.post('/dev/bypass-validation', (req: Request, res: Response) => {
+    console.log('Bypassing validation for development');
+    res.json({ message: 'Validation bypassed for development' });
+  });
+}
+
+// Password strength check endpoint
+app.post('/api/check-password-strength', (req: Request, res: Response) => {
+  const { checkPasswordStrength } = require('./middleware/validationMiddleware');
+  const { password } = req.body;
+  
+  if (!password) {
+    return res.status(400).json({
+      success: false,
+      message: 'Password is required'
+    });
+  }
+  
+  const strengthAnalysis = checkPasswordStrength(password);
+  
+  res.json({
+    success: true,
+    strength: strengthAnalysis.strength,
+    feedback: strengthAnalysis.feedback
+  });
+});
+
 app.use(notFound);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
-});
+// Fixed: Properly handle database connection before starting the server
+const startServer = async () => {
+  try {
+    // Wait for database connection
+    await connectDB();
+    
+    // Start server only after successful database connection
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+      console.log(`📡 API available at: http://localhost:${PORT}`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the application
+startServer();
