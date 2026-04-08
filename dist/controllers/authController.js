@@ -41,6 +41,7 @@ const loginUser = (0, express_async_handler_1.default)(async (req, res) => {
             (0, loginAttemptMiddleware_1.resetLoginAttempts)(email);
             (0, generateTokens_1.setTokens)(res, user._id.toString());
             res.status(200).json({
+                success: true,
                 _id: user._id,
                 name: user.name,
                 email: user.email,
@@ -77,19 +78,17 @@ const registerUser = (0, express_async_handler_1.default)(async (req, res) => {
             res.status(400);
             throw new Error('User already exists');
         }
-        let isActive = false; // Default to false for email verification
-        let isEmailVerified = false; // Default to false for email verification
+        // Check if user needs approval
+        let isActive = true; // Default to true for all users
+        let isEmailVerified = true; // Default to true for simplicity
+        // Only require admin approval if there's already an admin and this is a new admin
         if (role === 'admin') {
             const existingAdmin = await User_1.default.findOne({ role: 'admin' });
-            if (!existingAdmin) {
-                isActive = true; // First admin can be active without verification
-                isEmailVerified = true; // First admin doesn't need email verification
+            if (existingAdmin) {
+                isActive = false; // New admins need approval from existing admin
+                isEmailVerified = false;
             }
-        }
-        else {
-            // Regular users don't need admin approval
-            isActive = true;
-            isEmailVerified = true; // Skip email verification for simplicity
+            // First admin is automatically approved
         }
         const user = await User_1.default.create({
             name,
@@ -105,7 +104,9 @@ const registerUser = (0, express_async_handler_1.default)(async (req, res) => {
                     ? 'Admin account created successfully. Please wait for an existing admin to approve your request.'
                     : 'Account created successfully. Please check your email to verify your account.';
                 res.status(201).json({
+                    success: false,
                     message,
+                    requiresApproval: true,
                     _id: user._id,
                     name: user.name,
                     role: user.role,
@@ -116,6 +117,7 @@ const registerUser = (0, express_async_handler_1.default)(async (req, res) => {
             }
             (0, generateTokens_1.setTokens)(res, user._id.toString());
             res.status(201).json({
+                success: true,
                 _id: user._id,
                 name: user.name,
                 email: user.email,
@@ -131,7 +133,6 @@ const registerUser = (0, express_async_handler_1.default)(async (req, res) => {
         }
     }
     catch (error) {
-        // Re-throw the error to be handled by error middleware
         throw error;
     }
 });

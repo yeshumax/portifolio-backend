@@ -16,6 +16,7 @@ require("./models/User");
 require("./models/Project");
 require("./models/Skill");
 require("./models/Message");
+require("./models/Notification");
 require("./models/AuditLog");
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
@@ -23,9 +24,10 @@ const projectRoutes_1 = __importDefault(require("./routes/projectRoutes"));
 const messageRoutes_1 = __importDefault(require("./routes/messageRoutes"));
 const skillRoutes_1 = __importDefault(require("./routes/skillRoutes"));
 const profileRoutes_1 = __importDefault(require("./routes/profileRoutes"));
+const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
 const app = (0, express_1.default)();
 const corsOptions = {
-    origin: ['http://localhost:3000', 'https://portiolios-frontend.vercel.app', 'http://127.0.0.1:3000'],
+    origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'https://portiolios-frontend.vercel.app', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001', 'http://127.0.0.1:5173'],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -41,6 +43,7 @@ app.use('/api/projects', projectRoutes_1.default);
 app.use('/api/messages', messageRoutes_1.default);
 app.use('/api/skills', skillRoutes_1.default);
 app.use('/api/profile', profileRoutes_1.default);
+app.use('/api/notifications', notificationRoutes_1.default);
 app.use('/uploads', express_1.default.static(path_1.default.join(process.cwd(), 'uploads')));
 app.get('/', (req, res) => {
     res.send('API is running...');
@@ -51,6 +54,17 @@ if (process.env.NODE_ENV === 'development') {
         const { clearRateLimits } = require('./middleware/rateLimitMiddleware');
         clearRateLimits();
         res.json({ message: 'Rate limits cleared' });
+    });
+    app.post('/dev/reset-login-attempts', (req, res) => {
+        const { resetLoginAttempts } = require('./middleware/loginAttemptMiddleware');
+        const { email } = req.body;
+        if (email) {
+            resetLoginAttempts(email);
+            res.json({ message: `Login attempts reset for ${email}` });
+        }
+        else {
+            res.status(400).json({ message: 'Email is required' });
+        }
     });
     app.post('/dev/reseed-database', async (req, res) => {
         try {

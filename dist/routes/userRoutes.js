@@ -8,10 +8,13 @@ const userController_1 = require("../controllers/userController");
 const authController_1 = require("../controllers/authController");
 const authMiddleware_1 = require("../middleware/authMiddleware");
 const router = express_1.default.Router();
-router.route('/').get(authMiddleware_1.protect, authMiddleware_1.admin, userController_1.getUsers);
+router.route('/').get(authMiddleware_1.protect, authMiddleware_1.admin, userController_1.getAllUsersForAdmin);
 router.post('/register', authMiddleware_1.protect, authMiddleware_1.admin, authController_1.registerUser);
+router.get('/current-admin', authMiddleware_1.protect, authMiddleware_1.admin, userController_1.getCurrentAdmin);
+router.get('/pending-admins', authMiddleware_1.protect, authMiddleware_1.admin, userController_1.getPendingAdmins);
 router
     .route('/:id')
     .put(authMiddleware_1.protect, authMiddleware_1.admin, userController_1.updateUser)
     .delete(authMiddleware_1.protect, authMiddleware_1.admin, userController_1.deleteUser);
+router.put('/:id/approve-admin', authMiddleware_1.protect, authMiddleware_1.admin, userController_1.approveAdmin);
 exports.default = router;

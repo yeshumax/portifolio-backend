@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUnreadMessages = exports.markAsRead = exports.getUnhandledCount = exports.respondToMessage = exports.getMyMessages = exports.getMessages = exports.createMessage = void 0;
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const Message_1 = __importDefault(require("../models/Message"));
+const notificationController_1 = require("./notificationController");
 // @desc    Create a new message (public - accessible without authentication)
 // @route   POST /api/messages
 // @access  Public
@@ -47,6 +48,8 @@ exports.createMessage = (0, express_async_handler_1.default)(async (req, res) =>
         messageData.email = email;
     }
     const newMessage = await Message_1.default.create(messageData);
+    // Create notification for admins about new message
+    await (0, notificationController_1.createMessageNotification)(newMessage._id.toString(), req.user?._id?.toString());
     res.status(201).json({
         message: 'Message sent successfully',
         data: {
@@ -97,6 +100,10 @@ exports.respondToMessage = (0, express_async_handler_1.default)(async (req, res)
     message.isReadByUser = false; // Mark unread for user when admin responds
     message.isReadByAdmin = true; // Admin has read it if they are responding
     const updatedMessage = await message.save();
+    // Create notification for user about admin response
+    if (adminResponse && message.userId) {
+        await (0, notificationController_1.createAdminResponseNotification)(message._id.toString(), req.user._id.toString());
+    }
     res.status(200).json(updatedMessage);
 });
 // @desc    Get unhandled messages count (admin only)

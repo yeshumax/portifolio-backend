@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.updateUser = exports.getUsers = void 0;
+exports.getCurrentAdmin = exports.getAllUsersForAdmin = exports.getPendingAdmins = exports.approveAdmin = exports.deleteUser = exports.updateUser = exports.getUsers = void 0;
 const express_async_handler_1 = __importDefault(require("express-async-handler"));
 const User_1 = __importDefault(require("../models/User"));
 const getUsers = (0, express_async_handler_1.default)(async (req, res) => {
@@ -58,3 +58,64 @@ const deleteUser = (0, express_async_handler_1.default)(async (req, res) => {
     }
 });
 exports.deleteUser = deleteUser;
+const approveAdmin = (0, express_async_handler_1.default)(async (req, res) => {
+    const user = await User_1.default.findById(req.params.id);
+    if (!user) {
+        res.status(404);
+        throw new Error('User not found');
+    }
+    if (user.role !== 'admin') {
+        res.status(400);
+        throw new Error('User is not an admin');
+    }
+    if (user.isActive) {
+        res.status(400);
+        throw new Error('Admin is already active');
+    }
+    user.isActive = true;
+    user.isEmailVerified = true;
+    const updatedUser = await user.save();
+    res.status(200).json({
+        message: 'Admin approved successfully',
+        _id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        isActive: updatedUser.isActive,
+        isEmailVerified: updatedUser.isEmailVerified,
+    });
+});
+exports.approveAdmin = approveAdmin;
+const getPendingAdmins = (0, express_async_handler_1.default)(async (req, res) => {
+    const pendingAdmins = await User_1.default.find({
+        role: 'admin',
+        isActive: false
+    }).select('-password');
+    res.status(200).json(pendingAdmins);
+});
+exports.getPendingAdmins = getPendingAdmins;
+const getAllUsersForAdmin = (0, express_async_handler_1.default)(async (req, res) => {
+    const users = await User_1.default.find({}).select('-password');
+    res.status(200).json(users);
+});
+exports.getAllUsersForAdmin = getAllUsersForAdmin;
+const getCurrentAdmin = (0, express_async_handler_1.default)(async (req, res) => {
+    if (!req.user) {
+        res.status(401);
+        throw new Error('Not authorized');
+    }
+    if (req.user.role !== 'admin') {
+        res.status(403);
+        throw new Error('Not authorized as admin');
+    }
+    res.status(200).json({
+        _id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        role: req.user.role,
+        profileImage: req.user.profileImage,
+        isActive: req.user.isActive,
+        isEmailVerified: req.user.isEmailVerified,
+    });
+});
+exports.getCurrentAdmin = getCurrentAdmin;
