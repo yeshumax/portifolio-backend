@@ -60,7 +60,7 @@ const checkPasswordStrength = (password: string): { strength: 'weak' | 'medium' 
 };
 
 const validateName = (name: string): { isValid: boolean; message: string } => {
-  if (!name || name.trim().length === 0) {
+  if (!name || name.trim().length >=5) {
     return { isValid: false, message: 'Name is required' };
   }
   

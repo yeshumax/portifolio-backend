@@ -43,6 +43,7 @@ const loginUser = asyncHandler(async (req: Request, res: Response) => {
       
       setTokens(res, user._id.toString());
       res.status(200).json({
+        success: true,
         _id: user._id,
         name: user.name,
         email: user.email,
@@ -81,19 +82,18 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
       throw new Error('User already exists');
     }
 
-    let isActive = false; // Default to false for email verification
-    let isEmailVerified = false; // Default to false for email verification
+    // Check if user needs approval
+    let isActive = true; // Default to true for all users
+    let isEmailVerified = true; // Default to true for simplicity
     
+    // Only require admin approval if there's already an admin and this is a new admin
     if (role === 'admin') {
       const existingAdmin = await User.findOne({ role: 'admin' });
-      if (!existingAdmin) {
-        isActive = true; // First admin can be active without verification
-        isEmailVerified = true; // First admin doesn't need email verification
+      if (existingAdmin) {
+        isActive = false; // New admins need approval from existing admin
+        isEmailVerified = false;
       }
-    } else {
-      // Regular users don't need admin approval
-      isActive = true;
-      isEmailVerified = true; // Skip email verification for simplicity
+      // First admin is automatically approved
     }
 
     const user = await User.create({
@@ -112,7 +112,9 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
           : 'Account created successfully. Please check your email to verify your account.';
         
         res.status(201).json({
+          success: false,
           message,
+          requiresApproval: true,
           _id: user._id,
           name: user.name,
           role: user.role,
@@ -124,6 +126,7 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
 
       setTokens(res, user._id.toString());
       res.status(201).json({
+        success: true,
         _id: user._id,
         name: user.name,
         email: user.email,
@@ -137,7 +140,6 @@ const registerUser = asyncHandler(async (req: Request, res: Response) => {
       throw new Error('Invalid user data');
     }
   } catch (error: any) {
-    // Re-throw the error to be handled by error middleware
     throw error;
   }
 });

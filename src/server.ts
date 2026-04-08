@@ -24,7 +24,7 @@ import profileRoutes from './routes/profileRoutes';
 const app: Application = express();
 
 const corsOptions = {
-  origin: ['http://localhost:3000', 'https://portiolios-frontend.vercel.app', 'http://127.0.0.1:3000'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5173', 'https://portiolios-frontend.vercel.app', 'http://127.0.0.1:3000', 'http://127.0.0.1:3001', 'http://127.0.0.1:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -55,6 +55,17 @@ if (process.env.NODE_ENV === 'development') {
     const { clearRateLimits } = require('./middleware/rateLimitMiddleware');
     clearRateLimits();
     res.json({ message: 'Rate limits cleared' });
+  });
+
+  app.post('/dev/reset-login-attempts', (req: Request, res: Response) => {
+    const { resetLoginAttempts } = require('./middleware/loginAttemptMiddleware');
+    const { email } = req.body;
+    if (email) {
+      resetLoginAttempts(email);
+      res.json({ message: `Login attempts reset for ${email}` });
+    } else {
+      res.status(400).json({ message: 'Email is required' });
+    }
   });
 
   app.post('/dev/reseed-database', async (req: Request, res: Response) => {
