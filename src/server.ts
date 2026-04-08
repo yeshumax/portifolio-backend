@@ -12,6 +12,7 @@ import './models/User';
 import './models/Project';
 import './models/Skill';
 import './models/Message';
+import './models/Notification';
 import './models/AuditLog';
 
 import authRoutes from './routes/authRoutes';
@@ -20,6 +21,7 @@ import projectRoutes from './routes/projectRoutes';
 import messageRoutes from './routes/messageRoutes';
 import skillRoutes from './routes/skillRoutes';
 import profileRoutes from './routes/profileRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 
 const app: Application = express();
 
@@ -42,6 +44,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/skills', skillRoutes);
 app.use('/api/profile', profileRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 

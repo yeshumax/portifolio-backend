@@ -60,20 +60,11 @@ const checkPasswordStrength = (password: string): { strength: 'weak' | 'medium' 
 };
 
 const validateName = (name: string): { isValid: boolean; message: string } => {
-  if (!name || name.trim().length >=5) {
+  if (!name || name.trim().length < 2) {
     return { isValid: false, message: 'Name is required' };
   }
-  
-  if (name.trim().length < 2) {
-    return { isValid: false, message: 'Name must be at least 2 characters long' };
-  }
-  
   if (name.trim().length > 50) {
-    return { isValid: false, message: 'Name must be less than 50 characters long' };
-  }
-  
-  if (!/^[a-zA-Z\s\-']+$/.test(name.trim())) {
-    return { isValid: false, message: 'Name can only contain letters, spaces, hyphens, and apostrophes' };
+    return { isValid: false, message: 'Name must be less than 50 characters' };
   }
   
   return { isValid: true, message: '' };

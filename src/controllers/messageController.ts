@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import asyncHandler from 'express-async-handler';
 import Message, { IMessage } from '../models/Message';
+import { createMessageNotification, createAdminResponseNotification } from './notificationController';
 
 // Extend Request type to include user
 interface AuthRequest extends Request {
@@ -54,6 +55,9 @@ export const createMessage = asyncHandler(async (req: AuthRequest, res: Response
   }
 
   const newMessage = await Message.create(messageData);
+
+  // Create notification for admins about new message
+  await createMessageNotification(newMessage._id.toString(), req.user?._id?.toString());
 
   res.status(201).json({
     message: 'Message sent successfully',
@@ -114,6 +118,12 @@ export const respondToMessage = asyncHandler(async (req: AuthRequest, res: Respo
   message.isReadByAdmin = true; // Admin has read it if they are responding
 
   const updatedMessage = await message.save();
+
+  // Create notification for user about admin response
+  if (adminResponse && message.userId) {
+    await createAdminResponseNotification(message._id.toString(), req.user._id.toString());
+  }
+
   res.status(200).json(updatedMessage);
 });
 
